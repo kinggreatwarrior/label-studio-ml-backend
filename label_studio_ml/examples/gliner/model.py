@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 
 import label_studio_sdk
 import torch
+import re
 from gliner import GLiNER
 from label_studio_ml.model import LabelStudioMLBase
 from label_studio_ml.response import ModelResponse
@@ -14,7 +15,7 @@ from transformers import get_cosine_schedule_with_warmup
 
 logger = logging.getLogger(__name__)
 
-GLINER_MODEL_NAME = os.getenv("GLINER_MODEL_NAME", "urchade/gliner_medium-v2.1")
+GLINER_MODEL_NAME = os.getenv("GLINER_MODEL_NAME", "E3-JSI/gliner-multi-pii-domains-v1")
 logger.info(f"Loading GLINER model {GLINER_MODEL_NAME}")
 MODEL = GLiNER.from_pretrained(GLINER_MODEL_NAME)
 
@@ -129,7 +130,8 @@ class GLiNERModel(LabelStudioMLBase):
         :param task: the task as output by Label Studio
         """
         # We get the list of tokens from the original data sample we uploaded
-        tokens = task['data']['tokens']
+        taskText = task['data']['text']
+        tokens = self.tokenize_text(taskText)
         ner = []
         # Parse the annotations
         for annotation in task['annotations']:
@@ -140,6 +142,10 @@ class GLiNERModel(LabelStudioMLBase):
                 label = result['value']['labels'][0]
                 ner.append([start_token, end_token, label])
         return tokens, ner
+    
+    def tokenize_text(self, text):
+        """Tokenize the input text into a list of tokens."""
+        return re.findall(r'\b[\w\-\.?;=~*{}+&:@#$%^|\'`/]+\b|\d+(?:/\d+)?|[\(\)]', text)
 
     def train(self, model, config, train_data, eval_data=None):
         """
@@ -245,7 +251,8 @@ class GLiNERModel(LabelStudioMLBase):
                 "samples": training_data[:10]
             }
 
-            training_data = training_data[10:]
+            training_data = training_data[:10]
+            print(f"training_data[10:]: {training_data}")
             logger.debug(training_data)
 
             # Define the hyperparameters in a config variable
